@@ -30,7 +30,7 @@ function reactive(obj, isDeep = true, isReadOnly = false) {
     },
     get(target, key, receiver) {
       // 只读数据不需要做依赖收集
-      if (!isReadOnly) {
+      if (isReadOnly) {
         return;
       }
       // 添加raw属性 以便于我们通过代理对象的raw属性 访问原始对象target
@@ -67,7 +67,7 @@ function reactive(obj, isDeep = true, isReadOnly = false) {
       if (target === receiver.raw) {
         if (
           oldValue !== newValue &&
-          (oldValue !== oldValue || newValue !== newValue)
+          (oldValue === oldValue || newValue === newValue)
         ) {
           trigger(target, key, type);
         }
@@ -104,7 +104,7 @@ function track(target, key) {
   }
   effects.add(activeEffect);
   // 将与当前副作用函存在关联的的依赖集合 添加到activeEffect.deps 数组中 以便于清除遗留的副作用函数
-  activeEffect.deps.push(deps);
+  activeEffect && activeEffect.deps && activeEffect.deps.push(deps);
 }
 
 // 调度当前key关联的副作用函数
@@ -139,12 +139,12 @@ function trigger(target, key, type) {
 
 // 每次执行副作用函数时 在集合中清除当前副作用函数
 function effect(fn) {
-  const effectFn = (fn) => {
+  const effectFn = () => {
     cleanUp(effectFn);
     activeEffect = effectFn;
-    fn();
+    fn && fn();
   };
-  effectFn.deps();
+  effectFn.deps = [];
   effectFn();
 }
 
@@ -161,6 +161,8 @@ function cleanUp(effectFn) {
 // 在初次调用getAge函数时 访问了obj的name及age 属性 因此name 和age 都会绑定绑定getAge 副作用函数
 // 当我们把name置为空时 我们不会再访问age 属性 这时我们再修改它的值 理论上不应该调用副作用函数 但实际上hi再次调用
 // @todo 每次执行副作用函数时 对其关联的key从依赖集合中删除  清除遗留副作用函数
+/**
+ * 
 const obj = reactive({
   name: "wang",
   age: "18",
@@ -176,7 +178,7 @@ function getAge() {
 effect(getAge);
 obj.name = "";
 obj.age = "19";
-
+ */
 // @note 本节我们主要对对象的 in操作符 for...in遍历 以及delete 做了响应式  的处理
 // @tag 思考一下 如果一个对象的属性的值 是一个引用类型的话
 //      由于我们只对当前对象的第一层做了依赖收集 当修改第二层数据时无法调用到副作用函数 我们就需要给第二层的引用数据类型也加上响应式 直接递归 reactive函数

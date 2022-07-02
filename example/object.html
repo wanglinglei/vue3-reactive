@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <input type="text" id="input1" />
+    <input type="text" id="input2" />
+    <div id="effectDom1"></div>
+    <div id="effectDom2"></div>
+    <div id="effectDom3"></div>
+  </body>
+</html>
+<style>
+  #effectDom1 {
+    width: 200px;
+    height: 50px;
+    text-align: center;
+    line-height: 50px;
+    background-color: bisque;
+  }
+  #effectDom2 {
+    width: 200px;
+    height: 50px;
+    text-align: center;
+    line-height: 50px;
+    background-color: greenyellow;
+  }
+</style>
+
+<script src="../object/proxy-3.js"></script>
+<script>
+  const int1 = document.getElementById("input1");
+  const int2 = document.getElementById("input2");
+  const dom1 = document.getElementById("effectDom1");
+  const dom2 = document.getElementById("effectDom2");
+  const dom3 = document.getElementById("effectDom3");
+  const data = {
+    key1: "aaa",
+    key2: "key2",
+  };
+  const proxyObj = reactive(data);
+  // @tag 验证对象赋值
+  function effect1() {
+    dom1.innerHTML = proxyObj.key1;
+  }
+  // @tag 验证对象数据分支切换
+  function effect2() {
+    dom2.innerHTML = proxyObj.key1 ? proxyObj.key2 : "default";
+  }
+  // @tag 验证对象for... in 遍历 和delete
+  function effect3() {
+    dom3.innerHTML = "";
+    console.log(proxyObj, "proxyObj");
+    for (const key in proxyObj) {
+      console.log(proxyObj.key);
+      dom3.innerHTML += `<div>${key}:${proxyObj[key]}</div>`;
+    }
+  }
+  effect(effect1);
+  effect(effect2);
+  effect(effect3);
+  int1.addEventListener("input", (e) => {
+    proxyObj.key1 = e.target.value;
+  });
+  int2.addEventListener("input", (e) => {
+    proxyObj.key2 = e.target.value;
+  });
+  setTimeout(() => {
+    proxyObj.key3 = "key3";
+    delete proxyObj.key1;
+  }, 3000);
+</script>
