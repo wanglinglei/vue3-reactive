@@ -30,3 +30,10 @@ Vue3 是通过Proxy实现，Proxy顾名思义，代理就意味着我们所有�
 *  Set和Map 数据结构
 *  Iterator 和 for...of 循环
 上述章节，需要对Proxy Reflect Set Map WeakMap Iterator 等知识有一定的认识。
+
+对于常见的数据类型，我们需要做的拦截操作主要有
+* **object**
+    * *in 操作符*  判断当前对象上是否有某个属性
+    * *for...in*   遍历一个对象数据的key
+    * *取值、赋值*
+    * *delete*   删除对象的一个键值对
