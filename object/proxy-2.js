@@ -36,6 +36,10 @@ function reactive(obj) {
 
 // 这里我们称为依赖收集函数
 function track(target, key) {
+  // 没有激活的副作用函数
+  if (!activeEffect) {
+    return;
+  }
   // 从桶里取出target对应的Map;没有就创建
   let deps = bucket.get(target);
   if (!deps) {

@@ -1,4 +1,4 @@
-// 本节我们针对object属性的 删除 新增 for...in遍历及in操作符 实现响应式
+// 本节我们针对数组的length for...in 下标赋值等操作实现响应式
 
 // 副作用函数存储桶
 let bucket = new WeakMap();
@@ -23,9 +23,10 @@ function reactive(obj, isDeep = true, isReadOnly = false) {
       track(target, key);
       return Reflect.has(target, key);
     },
-    // obj 的for...in 遍历实际上调用的是ownKeys 方法 因此我们可以拦截此方法来对for...in做依赖收集
+    // object 的for...in 遍历实际上调用的是ownKeys 方法 因此我们可以拦截此方法来对for...in做依赖收集
+    // array  的for...in 实际上调用的也是ownKeys 对于数组我们需要与数组的length做关联
     ownKeys(target) {
-      track(target, ITERATE_KEY);
+      track(target, Array.isArray(target) ? "length" : ITERATE_KEY);
       return Reflect.ownKeys(target);
     },
     get(target, key, receiver) {
@@ -57,9 +58,16 @@ function reactive(obj, isDeep = true, isReadOnly = false) {
       }
       // 判断当前的操作类型 如果原对象上有当前key为赋值 没有则是新增
       // 赋值对对象长度没有影响 不应该触发 for...in 相关的副作用函数
-      const type = Object.prototype.hasOwnProperty.call(target, key)
-        ? "SET"
-        : "ADD";
+      // 新增对数组的判断  通过数组下标设置数组的值时 如果当前下标大于当前数组的length 则为新增元素 否则为修改元素值
+      let type = "";
+      if (Array.isArray(target)) {
+        type = Number(key) >= target.length ? "ADD" : "SET";
+      } else {
+        type = Object.prototype.hasOwnProperty.call(target, key)
+          ? "SET"
+          : "ADD";
+      }
+
       const oldValue = target[key];
       const res = Reflect.set(target, key, newValue, receiver);
       // 新值旧值不相等 且不为NAN　时才调用副作用函数
@@ -135,7 +143,26 @@ function trigger(target, key, type) {
         effectsToRun.add(effectFn);
       });
   }
-
+  // 如果是数组 并且是新增元素 需要调用和length相关的副作用函数
+  if (type === "ADD" && Array.isArray(target)) {
+    const lengthEffects = deps.get("length");
+    lengthEffects &&
+      lengthEffects.forEach((effectFn) => {
+        effectsToRun.add(effectFn);
+      });
+  }
+  // 如果是数组 并且修改了数组的length属性
+  // 对于索引大于或等于新的length时需要把所有相关的副作用函数取出执行
+  //  eg: arr=[1,2,3,4]; arr.length=2;=> arr=[1,2] 这时 属性3,4 被删除 需要执行他们相关联的副作用函数
+  if (Array.isArray(target) && key === "length") {
+    deps.forEach((effects, key) => {
+      if (key >= newValue) {
+        effects.forEach((effectFn) => {
+          effectsToRun.add(effectFn);
+        });
+      }
+    });
+  }
   effectsToRun.forEach((effectFn) => {
     effectFn();
   });
@@ -161,29 +188,7 @@ function cleanUp(effectFn) {
   effectFn.deps.length = 0;
 }
 
-// @tag 思考一下下面场景
-// 在初次调用getAge函数时 访问了obj的name及age 属性 因此name 和age 都会绑定绑定getAge 副作用函数
-// 当我们把name置为空时 我们不会再访问age 属性 这时我们再修改它的值 理论上不应该调用副作用函数 但实际上hi再次调用
-// @todo 每次执行副作用函数时 对其关联的key从依赖集合中删除  清除遗留副作用函数
-/**
- * 
-const obj = reactive({
-  name: "wang",
-  age: "18",
-});
-
-function effect(fn) {
-  fn();
-}
-
-function getAge() {
-  const age = obj.name ? obj.age : "default";
-}
-effect(getAge);
-obj.name = "";
-obj.age = "19";
- */
-// @note 本节我们主要对对象的 in操作符 for...in遍历 以及delete 做了响应式  的处理
-// @tag 思考一下 如果一个对象的属性的值 是一个引用类型的话
-//      由于我们只对当前对象的第一层做了依赖收集 当修改第二层数据时无法调用到副作用函数 我们就需要给第二层的引用数据类型也加上响应式 直接递归 reactive函数
-// @tag 除了深浅响应的问题 我们还需要处理一些只读数据的问题 只读数据不允许修改和删除 因此我们不需要做依赖收集 也不需要调用副作用函数 直接拦截掉相关操作就可以了
+// @note 本节我们实现了数组的length属性的响应式  及for...in遍历的响应式
+// 当我们通过数组下标新增数组元素时 如果下标大于等于数组的length 会改变数组的length 因此需要触发数组length相关的副作用函数
+// 当我们直接设置数组的length时 需要触发数组length相关的副作用函数 如果设置length小于数组的length 相当于数组的部分元素被删除 那么也需要触发被删除元素的副作用函数
+// for...in 对于数组的遍历 我们只需要关注数组的length

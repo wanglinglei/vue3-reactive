@@ -37,3 +37,11 @@ Vue3 是通过Proxy实现，Proxy顾名思义，代理就意味着我们所有�
     * *for...in*   遍历一个对象数据的key
     * *取值、赋值*
     * *delete*   删除对象的一个键值对
+* **Array**
+    *  *length*
+    *  *includes indexOf lastIndexOf*
+    *  *push pop shift unshift splice*
+    *  *通过下标取值*
+    *  *for...in*
+    *  *for...of*
+    *  *forEach*

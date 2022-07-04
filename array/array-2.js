@@ -1,4 +1,41 @@
-// 本节我们针对object属性的 删除 新增 for...in遍历及in操作符 实现响应式
+// 本节我们针对array 的for...of遍历 数组的查找方法(includes indexOf lastIndexOf)
+// 以及 隐式改变数组的length的方法(pop、push、shift、unshift、splice)  实现响应式
+
+// const a = { name: "a" };
+// const arr = reactive([a]);
+// console.log(arr.includes(a)); // false
+// console.log(arr.includes(arr[0])); //false
+// 之所以出现这种情况 是因为当我们调用includes 方法时 在这里内部的this指向为代理对象
+// 而这里a因为是引用类型数据 我们也会为a创建一个代理对象 因此在arr 内部不存在a
+// 如果我们要实现正常的取值 当调用数组的方法时 只需要改变代理对象的this 指向到原始对象即可
+
+// 重写数组的操作方法
+const arrayMethods = {};
+let shouldTrack = true;
+// 取值操作先取代理对象 再取原始对象
+["includes", "indexOf", "lastIndexOf"].forEach((method) => {
+  // 从原型中取出对应操作方法
+  const originalMethod = Array.prototype[method];
+  arrayMethods[method] = function (...args) {
+    // 先从代理对象找 如果元素不是引用类型 这一层可以直击返回true
+    let res = originalMethod.apply(this, args);
+    if (res === false) {
+      // 再从原始对象找
+      res = originalMethod.apply(this.raw, args);
+    }
+    return res;
+  };
+});
+// 这些方法会改变数组的length属性 需要禁止依赖收集 否则会触发到length相关的副作用函数 形成死循环
+["pop", "push", "shift", "unshift", "splice"].forEach((method) => {
+  const originalMethod = Array.prototype[method];
+  arrayMethods[method] = function (...args) {
+    shouldTrack = false;
+    let res = originalMethod.apply(this, args);
+    shouldTrack = true;
+    return res;
+  };
+});
 
 // 副作用函数存储桶
 let bucket = new WeakMap();
@@ -23,26 +60,31 @@ function reactive(obj, isDeep = true, isReadOnly = false) {
       track(target, key);
       return Reflect.has(target, key);
     },
-    // obj 的for...in 遍历实际上调用的是ownKeys 方法 因此我们可以拦截此方法来对for...in做依赖收集
+    // object 的for...in 遍历实际上调用的是ownKeys 方法 因此我们可以拦截此方法来对for...in做依赖收集
+    // array  的for...in 实际上调用的也是ownKeys 对于数组我们需要与数组的length做关联
     ownKeys(target) {
-      track(target, ITERATE_KEY);
+      track(target, Array.isArray(target) ? "length" : ITERATE_KEY);
       return Reflect.ownKeys(target);
     },
     get(target, key, receiver) {
-      // 只读数据不需要做依赖收集
-      if (isReadOnly) {
-        return;
-      }
       // 添加raw属性 以便于我们通过代理对象的raw属性 访问原始对象target
       if (key === "raw") {
         return target;
+      }
+      // 如果是数组 并且调用的方法存在与arrayMethods中 从中取出调用
+      if (Array.isArray(target) && arrayMethods.hasOwnProperty(key)) {
+        return Reflect.get(arrayMethods, key, receiver);
+      }
+      // 非只读数据做依赖收集
+      // 数组的for...of 及values 方法隐式调用Symbol.iterator 只需要同for...of values做关联 不需要与Symbol.iterator做关联
+      if (!isReadOnly && typeof key !== "symbol") {
+        track(target, key);
       }
       const res = Reflect.get(target, key, receiver);
       // 如果是浅响应 直接返回结果
       if (!isDeep) {
         return res;
       }
-      track(target, key);
       // 如果是深响应 当前key的属性值为引用类型且不为null 递归创建属性值得响应式
       if (typeof res === "object" && res !== null) {
         return reactive(res);
@@ -57,9 +99,16 @@ function reactive(obj, isDeep = true, isReadOnly = false) {
       }
       // 判断当前的操作类型 如果原对象上有当前key为赋值 没有则是新增
       // 赋值对对象长度没有影响 不应该触发 for...in 相关的副作用函数
-      const type = Object.prototype.hasOwnProperty.call(target, key)
-        ? "SET"
-        : "ADD";
+      // 新增对数组的判断  通过数组下标设置数组的值时 如果当前下标大于当前数组的length 则为新增元素 否则为修改元素值
+      let type = "";
+      if (Array.isArray(target)) {
+        type = Number(key) >= target.length ? "ADD" : "SET";
+      } else {
+        type = Object.prototype.hasOwnProperty.call(target, key)
+          ? "SET"
+          : "ADD";
+      }
+
       const oldValue = target[key];
       const res = Reflect.set(target, key, newValue, receiver);
       // 新值旧值不相等 且不为NAN　时才调用副作用函数
@@ -92,8 +141,8 @@ function reactive(obj, isDeep = true, isReadOnly = false) {
 
 // 这里我们称为依赖收集函数
 function track(target, key) {
-  // 没有激活的副作用函数
-  if (!activeEffect) {
+  // 没有激活的副作用函数 或者不需要依赖收集
+  if (!activeEffect || !shouldTrack) {
     return;
   }
   // 从桶里取出target对应的Map;没有就创建
@@ -135,7 +184,26 @@ function trigger(target, key, type) {
         effectsToRun.add(effectFn);
       });
   }
-
+  // 如果是数组 并且是新增元素 需要调用和length相关的副作用函数
+  if (type === "ADD" && Array.isArray(target)) {
+    const lengthEffects = deps.get("length");
+    lengthEffects &&
+      lengthEffects.forEach((effectFn) => {
+        effectsToRun.add(effectFn);
+      });
+  }
+  // 如果是数组 并且修改了数组的length属性
+  // 对于索引大于或等于新的length时需要把所有相关的副作用函数取出执行
+  //  eg: arr=[1,2,3,4]; arr.length=2;=> arr=[1,2] 这时 属性3,4 被删除 需要执行他们相关联的副作用函数
+  if (Array.isArray(target) && key === "length") {
+    deps.forEach((effects, key) => {
+      if (key >= newValue) {
+        effects.forEach((effectFn) => {
+          effectsToRun.add(effectFn);
+        });
+      }
+    });
+  }
   effectsToRun.forEach((effectFn) => {
     effectFn();
   });
@@ -160,30 +228,3 @@ function cleanUp(effectFn) {
   }
   effectFn.deps.length = 0;
 }
-
-// @tag 思考一下下面场景
-// 在初次调用getAge函数时 访问了obj的name及age 属性 因此name 和age 都会绑定绑定getAge 副作用函数
-// 当我们把name置为空时 我们不会再访问age 属性 这时我们再修改它的值 理论上不应该调用副作用函数 但实际上hi再次调用
-// @todo 每次执行副作用函数时 对其关联的key从依赖集合中删除  清除遗留副作用函数
-/**
- * 
-const obj = reactive({
-  name: "wang",
-  age: "18",
-});
-
-function effect(fn) {
-  fn();
-}
-
-function getAge() {
-  const age = obj.name ? obj.age : "default";
-}
-effect(getAge);
-obj.name = "";
-obj.age = "19";
- */
-// @note 本节我们主要对对象的 in操作符 for...in遍历 以及delete 做了响应式  的处理
-// @tag 思考一下 如果一个对象的属性的值 是一个引用类型的话
-//      由于我们只对当前对象的第一层做了依赖收集 当修改第二层数据时无法调用到副作用函数 我们就需要给第二层的引用数据类型也加上响应式 直接递归 reactive函数
-// @tag 除了深浅响应的问题 我们还需要处理一些只读数据的问题 只读数据不允许修改和删除 因此我们不需要做依赖收集 也不需要调用副作用函数 直接拦截掉相关操作就可以了
