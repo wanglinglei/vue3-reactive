@@ -118,7 +118,7 @@ function reactive(obj, isDeep = true, isReadOnly = false) {
           oldValue !== newValue &&
           (oldValue === oldValue || newValue === newValue)
         ) {
-          trigger(target, key, type);
+          trigger(target, key, type, newValue);
         }
       }
       return res;
@@ -133,8 +133,9 @@ function reactive(obj, isDeep = true, isReadOnly = false) {
       const res = Reflect.deleteProperty(target, key);
       // 如果原对象上存在key 并且删除成功时 调用副作用函数
       if (hasKey && res) {
-        trigger(target, key, "DELETE");
+        trigger(target, key, "DELETE", undefined);
       }
+      return res;
     },
   });
 }
@@ -161,7 +162,7 @@ function track(target, key) {
 }
 
 // 调度当前key关联的副作用函数
-function trigger(target, key, type) {
+function trigger(target, key, type, newValue) {
   // 从副作用函数存储桶里取出当前key关联的副作用函数集合
   let deps = bucket.get(target);
   if (!deps) {
@@ -185,7 +186,7 @@ function trigger(target, key, type) {
       });
   }
   // 如果是数组 并且是新增元素 需要调用和length相关的副作用函数
-  if (type === "ADD" && Array.isArray(target)) {
+  if ((type === "ADD" || type === "DELETE") && Array.isArray(target)) {
     const lengthEffects = deps.get("length");
     lengthEffects &&
       lengthEffects.forEach((effectFn) => {

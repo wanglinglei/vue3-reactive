@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <div class="buttonBox">
+      <div id="add" class="button">+1</div>
+      <div id="reduce" class="button">-1</div>
+      <div id="move" class="button">move</div>
+    </div>
+    <ul id="ul"></ul>
+  </body>
+</html>
+<style>
+  .buttonBox {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+  }
+  .button {
+    width: 100px;
+    height: 50px;
+    font-size: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 20px;
+    background-color: aquamarine;
+    border-radius: 16px;
+    cursor: pointer;
+  }
+</style>
+<script src="../array//array-2.js"></script>
+<script>
+  const add = document.getElementById("add");
+  const reduce = document.getElementById("reduce");
+  const move = document.getElementById("move");
+  const ul = document.getElementById("ul");
+  const data = [1, 2, 3, 4, 5];
+  const arr = reactive(data);
+  function createList() {
+    ul.innerHTML = "";
+    arr.forEach((item) => {
+      ul.innerHTML += `<li>${item}</li>`;
+    });
+  }
+  effect(createList);
+  add.addEventListener("click", () => {
+    arr.push("a");
+  });
+  reduce.addEventListener("click", () => {
+    arr.pop();
+  });
+  move.addEventListener("click", () => {
+    const item = arr.splice(arr.length - 1, 1);
+    arr.splice(2, 0, item);
+  });
+</script>
