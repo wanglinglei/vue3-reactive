@@ -116,7 +116,7 @@ function track(target, key) {
   }
   effects.add(activeEffect);
   // 将与当前副作用函存在关联的的依赖集合 添加到activeEffect.deps 数组中 以便于清除遗留的副作用函数
-  activeEffect && activeEffect.deps && activeEffect.deps.push(deps);
+  activeEffect && activeEffect.deps && activeEffect.deps.push(effects);
 }
 
 // 调度当前key关联的副作用函数

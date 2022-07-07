@@ -26,7 +26,7 @@ function reactive(obj) {
       // 新值旧值不相等 且不为NAN　时才调用副作用函数
       if (
         oldValue !== newValue &&
-        (oldValue !== oldValue || newValue !== newValue)
+        (oldValue === oldValue || newValue === newValue)
       ) {
         trigger(target, key);
       }
@@ -52,7 +52,7 @@ function track(target, key) {
   }
   effects.add(activeEffect);
   // 将与当前副作用函存在关联的的依赖集合 添加到activeEffect.deps 数组中 以便于清除遗留的副作用函数
-  activeEffect.deps.push(deps);
+  activeEffect.deps.push(effects);
 }
 
 // 调度当前key关联的副作用函数
@@ -76,12 +76,12 @@ function trigger(target, key) {
 
 // 每次执行副作用函数时 在集合中清除当前副作用函数
 function effect(fn) {
-  const effectFn = (fn) => {
+  const effectFn = () => {
     cleanUp(effectFn);
     activeEffect = effectFn;
     fn();
   };
-  effectFn.deps();
+  effectFn.deps = [];
   effectFn();
 }
 
@@ -92,27 +92,28 @@ function cleanUp(effectFn) {
     deps.delete(effectFn);
   }
   effectFn.deps.length = 0;
+  console.log(effectFn.deps);
 }
 
 // @tag 思考一下下面场景
 // 在初次调用getAge函数时 访问了obj的name及age 属性 因此name 和age 都会绑定绑定getAge 副作用函数
 // 当我们把name置为空时 我们不会再访问age 属性 这时我们再修改它的值 理论上不应该调用副作用函数 但实际上hi再次调用
 // @todo 每次执行副作用函数时 对其关联的key从依赖集合中删除  清除遗留副作用函数
-const obj = reactive({
-  name: "wang",
-  age: "18",
-});
+// const obj = reactive({
+//   name: "wang",
+//   age: "18",
+// });
 
-function effect(fn) {
-  fn();
-}
+// function effect(fn) {
+//   fn();
+// }
 
-function getAge() {
-  const age = obj.name ? obj.age : "default";
-}
-effect(getAge);
-obj.name = "";
-obj.age = "19";
+// function getAge() {
+//   const age = obj.name ? obj.age : "default";
+// }
+// effect(getAge);
+// obj.name = "";
+// obj.age = "19";
 
 // @note 本节我们建立了一种新的数据结构WeakMap来作为副作用函数存储桶
 // 对依赖收集函数 及副作用调度函数做了封装解耦 并解决了分支切换的问题
