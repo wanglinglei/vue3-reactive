@@ -45,3 +45,14 @@ Vue3 是通过Proxy实现，Proxy顾名思义，代理就意味着我们所有�
     *  *for...in*
     *  *for...of*
     *  *forEach*
+* **Set/Map**
+    *   *size*
+    *   *add(Set)/set(Map)*
+    *   *clear*
+    *   *delete*
+    *   *has*
+    *   *get(Map)*
+    *   *keys/values/entries*
+    *   *forEach*
+* **Number/String/Boolean**
+    基本数据类型我们通过转成object实现响应式
